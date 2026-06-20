@@ -1,0 +1,14 @@
+__pycache__/
+.ipynb_checkpoints/
+
+.venv/
+venv/
+
+logs/
+
+*.db
+*.index
+
+data/pdfs/
+
+.env
