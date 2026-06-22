@@ -1,4 +1,4 @@
-# build/load/search FAISS
+# save/load/search FAISS
 import faiss
 import numpy as np
 from config import INDEX_PATH

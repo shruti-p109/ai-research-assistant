@@ -112,12 +112,12 @@ def get_unindexed_documents(session):
         select_query = select(Document.doc_id, Document.pdf_name, Document.file_path).where(Document.indexed_at == None)
         unindexed_documents = session.execute(select_query).all()
         session.commit()
+
+        return unindexed_documents
     except Exception as e:
         session.rollback()
         logger.error(f"Database error when geting unindexed documents: {e}", exc_info=True)
         raise e
-
-    return unindexed_documents
 
 def mark_document_indexed(session, doc_id: int):
     try:
@@ -130,3 +130,23 @@ def mark_document_indexed(session, doc_id: int):
         session.rollback()
         logger.error(f"Database error when marking document {doc_id} indexed: {e}", exc_info=True)
         raise e
+
+def get_chunks_by_ids(session, chunk_ids: list):
+    try:
+        select_query = select(
+            Chunk.chunk_text,
+            Document.pdf_name
+        ).join(
+            Document,
+            Chunk.doc_id == Document.doc_id
+        ).where(
+            Chunk.chunk_id.in_(chunk_ids)
+        )
+        chunk_texts = session.execute(select_query).all()
+        session.commit()
+
+        return chunk_texts
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Database error retrieving chunks by ids: {e}", exc_info=True)
+        raise e   
