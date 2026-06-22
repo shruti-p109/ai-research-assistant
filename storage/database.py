@@ -1,17 +1,16 @@
-from sqlalchemy import create_engine
-from datetime import date, datetime
 from typing import List
-from repo.storage.models import SessionLocal, Document, Author, Chunk
+from storage.models import Document, Author, Chunk
 from logger_setup import logger
-from sqlalchemy.engine import Engine
-from sqlalchemy import create_engine, declarative_base, sessionmaker, event, insert
+from sqlalchemy import create_engine, event, insert, select, update
+from sqlalchemy.orm import sessionmaker
 from config import DB_URL
+from datetime import datetime, timezone
 
 # database connection, foreign key explicit enforcement
 engine = create_engine(DB_URL, echo=True) # echo true will print raw sql
 
 # sqlite - turn on foreign key enforcement on connect
-@event.listens_for(Engine, "connect")
+@event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
@@ -26,7 +25,6 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 # autosyncing by autoflush is convenient but can cause performance issues when doing heavy data processing (parsing pdfs into 100 FAISS chunks)
 # commit - save on drive, you can see updates
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-Base = declarative_base() 
 
 # called in download_papers
 def bulk_insert_documents(
@@ -39,20 +37,20 @@ def bulk_insert_documents(
         documents_table_data = [
             {
                 "pdf_name": item["pdf_name"],
+                "file_path":item["file_path"],
+                "source_link":item["source_link"],
+                "source_name":item["source_name"],
                 "title": item["title"],
                 "published": item["published"]
             }
             for item in documents_metdata
         ]
 
-        # bulk inser documents
-        result = session.scalars(
+        # bulk insert documents
+        inserted_doc_ids = session.scalars(
             insert(Document).returning(Document.doc_id),
             documents_table_data
-        )
-
-        # convert result into list
-        inserted_doc_ids  = list(result)
+        ).all()
 
         # build list dicts for authors table insert
         author_dicts = []
@@ -78,27 +76,57 @@ def bulk_insert_documents(
         return inserted_doc_ids
     except Exception  as e:
         session.rollback()
-        logger.error(f"Database error occurred during document insertion: {e}", exc_info=True)
+        logger.error(f"Database error during document insertion: {e}", exc_info=True)
         raise e
 
 # called in index_documents
 def insert_chunks(
         session,
         doc_id: int,
-        chunk_text:str
-    ) -> int:
+        chunks: list
+    ) -> list:
         try:
-            new_chunk = Chunk(
-                doc_id=doc_id,
-                chunk_text=chunk_text
-            )
+           chunks_dicts = []
+           for chunk in chunks:
+               chunks_dicts.append(
+                   {
+                       'doc_id': doc_id,
+                       'chunk_text': chunk 
+                   }
+               )
 
-            session.add(new_chunk)
-            session.commit()
+           chunk_ids = session.scalars(
+                insert(Chunk).returning(Chunk.chunk_id),
+                chunks_dicts
+            ).all()
+           session.commit()
 
-            return new_chunk.chunk_id
+           return chunk_ids
         except Exception as e:
             session.rollback()
-            logger.error(f"Database error occurred during chunk insertion: {e}", exc_info=True)
+            logger.error(f"Database error during chunks insertion: {e}", exc_info=True)
             raise e
 
+def get_unindexed_documents(session):
+    try:
+        select_query = select(Document.doc_id, Document.pdf_name, Document.file_path).where(Document.indexed_at == None)
+        unindexed_documents = session.execute(select_query).all()
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Database error when geting unindexed documents: {e}", exc_info=True)
+        raise e
+
+    return unindexed_documents
+
+def mark_document_indexed(session, doc_id: int):
+    try:
+        update_query = update(Document).where(Document.doc_id == doc_id).values(
+            indexed_at = datetime.now(timezone.utc)
+        )
+        session.execute(update_query)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Database error when marking document {doc_id} indexed: {e}", exc_info=True)
+        raise e

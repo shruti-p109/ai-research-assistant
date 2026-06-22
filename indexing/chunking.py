@@ -9,7 +9,7 @@ import re
 
 # Overlap is the technique of repeating a small amount of text from the end of one chunk
 # at the beginning of the next to maintain contextual continuity
-def clean_text(text):
+def clean_text(text:str) -> str:
     # print('inside clean_text')
     # normalize spaces
     text = re.sub(r"\s+", " ", text)
@@ -27,7 +27,7 @@ def clean_text(text):
     text = re.sub(r'Author Manuscript\s*', '', text, flags=re.IGNORECASE)
     return text
 
-def chunk_text(text, max_chunk_chars=1000):
+def chunk_text(text:str, max_chunk_chars=1000) -> list:
     sentences = sent_tokenize(text)
     chunks = []
     current_chunk = ""

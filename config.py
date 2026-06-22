@@ -17,3 +17,5 @@ TOP_K = 5
 OLLAMA_MODEL = "llama3.1:8b"
 
 ARXIV_BASE_URL = "http://export.arxiv.org/api/query?"
+
+INDEX_PATH = str(DB_DIR / "faiss.index")

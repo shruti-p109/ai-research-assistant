@@ -8,23 +8,17 @@ import urllib.parse
 import urllib.request
 import feedparser
 from config import PDF_DIR, ARXIV_BASE_URL
-from repo.storage.database import insert_document, SessionLocal
+from storage.database import bulk_insert_documents, SessionLocal
 from datetime import datetime
 from logger_setup import logger
 
 def create_metatdata_entries(
-        pdf_name,
-        title,
-        published,
-        authors
+        documents_metadata
     ):
         with SessionLocal() as session:
-            inserted_doc_ids = insert_document(
+            inserted_doc_ids = bulk_insert_documents(
                 session,
-                pdf_name,
-                title,
-                published,
-                authors
+                documents_metadata
             )
         return inserted_doc_ids
 
@@ -77,7 +71,7 @@ def donwload_papers(category, search, total_results):
                 destination = os.path.join(PDF_DIR, f"{paper_id}.pdf")
 
                 if os.path.exists(destination):
-                    print(f"Skipping id {paper_id}. Already downloaded.")
+                    logger.info(f"Skipping id {paper_id}. Already downloaded.")
 
                 try:
                     # download binary file stream
@@ -88,8 +82,11 @@ def donwload_papers(category, search, total_results):
                     # add to metadata
                     documents_metadata.append(
                         {
+                            "pdf_name": f"{paper_id}.pdf",
                             "title": entry.title.replace("\n", " ").strip(),
-                            "time_tuple": entry.published_parsed,
+                            "file_path": destination,
+                            "source_link": entry.link,
+                            "source_name": "arxiv",
                             "published": datetime(*entry.published_parsed[:3]).date(),
                             "authors": [author.name for author in entry.authors]
                         }

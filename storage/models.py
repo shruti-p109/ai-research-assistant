@@ -1,10 +1,8 @@
-from ..config import DB_URL
 from datetime import date, datetime
 from typing import List, Optional
-from sqlalchemy import ForeignKey, DateTime, Date, event, Text
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy import ForeignKey, DateTime, Date, Text, String
+from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
-# base declaration and models
 class Base(DeclarativeBase):
     pass
 
@@ -12,9 +10,12 @@ class Document(Base):
     __tablename__ = "documents"
 
     doc_id: Mapped[int] = mapped_column(primary_key=True)
-    pdf_name: Mapped[str] = mapped_column(Text, unique=True)
-    title: Mapped[str] = mapped_column(Text)
-    published: Mapped[date] = mapped_column(Date)
+    pdf_name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    file_path: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    source_link: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    source_name: Mapped[str] = mapped_column(String, nullable=False)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    published: Mapped[date] = mapped_column(Date, nullable=False)
     indexed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # relationships
@@ -27,8 +28,8 @@ class Author(Base):
     __tablename__ = "authors"
 
     author_id: Mapped[int] = mapped_column(primary_key=True)
-    doc_id: Mapped[int] = mapped_column(ForeignKey("documents.doc_id"))
-    author_name: Mapped[str] = mapped_column(Text)
+    doc_id: Mapped[int] = mapped_column(ForeignKey("documents.doc_id"), nullable=False)
+    author_name: Mapped[str] = mapped_column(String, nullable=False)
 
     # Back-reference to the parent document
     document: Mapped['Document'] = relationship(back_populates='authors')
@@ -37,33 +38,11 @@ class Chunk(Base):
     __tablename__ = 'chunks'
 
     chunk_id: Mapped[int] = mapped_column(primary_key=True)
-    doc_id: Mapped[int] = mapped_column(ForeignKey("documents.doc_id"))
-    chunk_text: Mapped[str] = mapped_column(Text)
+    doc_id: Mapped[int] = mapped_column(ForeignKey("documents.doc_id"), nullable=False)
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Back-reference to the parent document
     document: Mapped['Document'] = relationship(back_populates='chunks')
-    
-
-# database connection, foreign key explicit enforcement
-engine = create_engine(DB_URL, echo=True) # echo true will print raw sql
-# sqlite - turn on foreign key enforcement on connect
-@event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
-
-# db initialization, session
-Base.metadata.create_all(engine)
-# configure session factory
-# autocommit false to turn off changing data on session.data, only on session.commit()
-# Flush - draft, on flush sqlalchemy sends data to engine, but does not save permenantly, its held in temp draft state (allows checking for syntax errors and generate automatic ids, you can use them in code)
-# flush is trigged on select() to make sure results come out to be accurate (in case you changed anything before select())
-# example: select after session.add(), you will get empty if autoflush is False
-# by default autoflush is True
-# autosyncing by autoflush is convenient but can cause performance issues when doing heavy data processing (parsing pdfs into 100 FAISS chunks)
-# commit - save on drive, you can see updates
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False) 
 
 # testing sample insertion
 # if __name__ == '__main__':
