@@ -3,6 +3,7 @@ import faiss
 import numpy as np
 from config import INDEX_PATH
 import os
+from config import TOP_K
 
 class VectorStore:
     def __init__(self, dimensions):
@@ -29,6 +30,6 @@ class VectorStore:
             INDEX_PATH
         )
 
-    def search(self, query_embedding, top_k=5):
+    def search(self, query_embedding, top_k = TOP_K):
         distances, chunk_ids = self.index.search(np.array([query_embedding], dtype=np.float32), top_k)
-        return chunk_ids[0], distances[0]
+        return chunk_ids[0]
